@@ -30,7 +30,7 @@
         <h1 class="text-xl font-bold tracking-tight">Medical Lab History</h1>
         <p class="text-slate-300 text-sm">Offline-first personal laboratory tracker & parser</p>
       </div>
-      <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.4 (Grid Table Parser)</span>
+      <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.5 (Robust Table Parser)</span>
     </div>
   </header>
 
@@ -411,7 +411,7 @@
   $('to').onchange = dash;
 
   function detectParam(text) {
-    let t = text.toLowerCase().replace(/[.:]/g, ' ').replace(/\s+/g, ' ');
+    let t = text.toLowerCase().replace(/[.:]/g, ' ').replace(/\s+/g, ' ').trim();
     let aliases = {
       'Chol. Total': ['chol total', 'total cholesterol', 'cholesterol total', 'cholesterol'],
       'Trombocyte': ['trombocyte', 'thrombocyte', 'platelet', 'platelets'],
@@ -440,7 +440,6 @@
     return null;
   }
 
-  // Grid-aware PDF extraction logic for multi-column tables in "43. Blood Test"
   async function pdfLines(file) {
     if (!window.pdfjsLib) {
       try {
@@ -490,7 +489,6 @@
           y: i.transform[5]
         }));
 
-      // Group items into visual rows by y coordinate (tolerance 4 units)
       let rows = [];
       for (let it of items) {
         let row = rows.find(r => Math.abs(r.y - it.y) <= 4);
@@ -501,12 +499,8 @@
         row.items.push(it);
       }
 
-      // Sort rows top-to-bottom (descending y)
       rows.sort((a, b) => b.y - a.y);
-
-      // Sort items within each row left-to-right (ascending x)
       rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
-
       allRows.push(...rows);
     }
 
@@ -530,16 +524,26 @@
       let seen = new Set();
       pending = [];
 
-      // Find where "43. Blood Test" section starts
-      let startIndex = rows.findIndex(r => r.items.some(i => /43\.\s*blood\s*test/i.test(i.s)));
+      // Robust check for section "43. Blood Test" by joining items in each row
+      let startIndex = rows.findIndex(r => {
+        let rowText = r.items.map(i => i.s).join(' ');
+        return /43\.?\s*blood\s*test/i.test(rowText);
+      });
+
+      // Fallback if numbering varies slightly
+      if (startIndex === -1) {
+        startIndex = rows.findIndex(r => {
+          let rowText = r.items.map(i => i.s).join(' ');
+          return /blood\s*test/i.test(rowText);
+        });
+      }
+
       let targetRows = startIndex !== -1 ? rows.slice(startIndex) : rows;
 
-      // Scan through rows looking for parameter headers, taking values from the corresponding cell directly below in each column
       for (let rIdx = 0; rIdx < targetRows.length - 1; rIdx++) {
         let headerRow = targetRows[rIdx];
 
-        // Stop if we hit a subsequent section header (e.g. "44.")
-        if (headerRow.items.some(i => /^\s*\d{2}\.\s+/.test(i.s) && !/43\.\s*blood\s*test/i.test(i.s))) {
+        if (headerRow.items.some(i => /^\s*\d{2}\.\s+/.test(i.s) && !/43\.?\s*blood\s*test/i.test(headerRow.items.map(x=>x.s).join(' ')))) {
           break;
         }
 
@@ -549,12 +553,10 @@
         let valueRow = targetRows[rIdx + 1];
         if (!valueRow) continue;
 
-        // Check each column in the header row
         for (let headerItem of headerRow.items) {
           let param = detectParam(headerItem.s);
           if (!param || seen.has(param)) continue;
 
-          // Find the corresponding value item in the row below based on closest horizontal X position
           let valItem = valueRow.items.reduce((closest, current) => {
             return Math.abs(current.x - headerItem.x) < Math.abs(closest.x - headerItem.x) ? current : closest;
           }, valueRow.items[0]);
