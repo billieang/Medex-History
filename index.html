@@ -30,7 +30,7 @@
         <h1 class="text-xl font-bold tracking-tight">Medical Lab History</h1>
         <p class="text-slate-300 text-sm">Offline-first personal laboratory tracker & parser</p>
       </div>
-      <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.5 (Robust Table Parser)</span>
+      <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.7 (Positional Line-Pair Parser)</span>
     </div>
   </header>
 
@@ -364,7 +364,7 @@
           <td class="p-2"><button class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded text-xs font-semibold" data-del="${esc(c.id)}">Delete</button></td>
         </tr>`).join('')}
         </tbody></table></div>`
-      : '<div class="text-center py-6 text-slate-400">No checkups saved.</div>';
+      : '<div class="text-center py-6 text-slate-400">No saved results.</div>';
 
     document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
       if (confirm('Delete this checkup and all associated lab values?')) {
@@ -440,6 +440,7 @@
     return null;
   }
 
+  // Standard line-by-line extraction with positional matching across multi-column table rows
   async function pdfLines(file) {
     if (!window.pdfjsLib) {
       try {
@@ -476,7 +477,7 @@
       }
     }
 
-    let allRows = [];
+    let rows = [];
     for (let n = 1; n <= pdf.numPages; n++) {
       let page = await pdf.getPage(n);
       let content = await page.getTextContent();
@@ -489,22 +490,26 @@
           y: i.transform[5]
         }));
 
-      let rows = [];
+      // Group text items by Y coordinate into visual rows
+      let pageRows = [];
       for (let it of items) {
-        let row = rows.find(r => Math.abs(r.y - it.y) <= 4);
+        let row = pageRows.find(r => Math.abs(r.y - it.y) <= 4);
         if (!row) {
           row = { y: it.y, items: [] };
-          rows.push(row);
+          pageRows.push(row);
         }
         row.items.push(it);
       }
 
-      rows.sort((a, b) => b.y - a.y);
-      rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
-      allRows.push(...rows);
+      // Sort rows top-to-bottom
+      pageRows.sort((a, b) => b.y - a.y);
+      // Sort items left-to-right within each row
+      pageRows.forEach(r => r.items.sort((a, b) => a.x - b.x));
+
+      rows.push(...pageRows);
     }
 
-    return { pdf, rows: allRows };
+    return { pdf, rows };
   }
 
   $('extract').onclick = async () => {
@@ -516,7 +521,7 @@
     }
 
     $('status').className = 'p-3 rounded-lg bg-sky-50 text-sky-800 text-sm border border-sky-200';
-    $('status').textContent = 'Extracting contents from table "43. Blood Test"...';
+    $('status').textContent = 'Extracting contents...';
     $('review').innerHTML = '';
 
     try {
@@ -524,38 +529,22 @@
       let seen = new Set();
       pending = [];
 
-      // Robust check for section "43. Blood Test" by joining items in each row
-      let startIndex = rows.findIndex(r => {
-        let rowText = r.items.map(i => i.s).join(' ');
-        return /43\.?\s*blood\s*test/i.test(rowText);
-      });
+      // Scan consecutive pairs of rows (Header row and Value row directly below)
+      for (let rIdx = 0; rIdx < rows.length - 1; rIdx++) {
+        let headerRow = rows[rIdx];
+        let valueRow = rows[rIdx + 1];
 
-      // Fallback if numbering varies slightly
-      if (startIndex === -1) {
-        startIndex = rows.findIndex(r => {
-          let rowText = r.items.map(i => i.s).join(' ');
-          return /blood\s*test/i.test(rowText);
-        });
-      }
+        // Check if the header row contains any recognized parameters
+        let headerItemsWithParams = headerRow.items.map(item => ({
+          item,
+          param: detectParam(item.s)
+        })).filter(x => x.param !== null);
 
-      let targetRows = startIndex !== -1 ? rows.slice(startIndex) : rows;
+        if (headerItemsWithParams.length === 0) continue;
 
-      for (let rIdx = 0; rIdx < targetRows.length - 1; rIdx++) {
-        let headerRow = targetRows[rIdx];
-
-        if (headerRow.items.some(i => /^\s*\d{2}\.\s+/.test(i.s) && !/43\.?\s*blood\s*test/i.test(headerRow.items.map(x=>x.s).join(' ')))) {
-          break;
-        }
-
-        let hasParams = headerRow.items.some(i => detectParam(i.s) !== null);
-        if (!hasParams) continue;
-
-        let valueRow = targetRows[rIdx + 1];
-        if (!valueRow) continue;
-
-        for (let headerItem of headerRow.items) {
-          let param = detectParam(headerItem.s);
-          if (!param || seen.has(param)) continue;
+        // For each header item found in this row, map it to the closest value item in the row below (by X coordinate)
+        for (let { item: headerItem, param } of headerItemsWithParams) {
+          if (seen.has(param)) continue;
 
           let valItem = valueRow.items.reduce((closest, current) => {
             return Math.abs(current.x - headerItem.x) < Math.abs(closest.x - headerItem.x) ? current : closest;
@@ -582,7 +571,7 @@
       }
 
       $('status').className = 'p-3 rounded-lg bg-emerald-50 text-emerald-800 text-sm border border-emerald-200';
-      $('status').textContent = `Parsed table "43. Blood Test"; identified ${pending.length} parameter candidate(s). Verify accuracy below:`;
+      $('status').textContent = `Extraction complete; identified ${pending.length} parameter candidate(s). Verify accuracy below:`;
       showReview();
     } catch (e) {
       $('status').className = 'p-3 rounded-lg bg-red-50 text-red-800 text-sm border border-red-200';
@@ -592,7 +581,7 @@
 
   function showReview() {
     if (!pending.length) {
-      $('review').innerHTML = '<div class="p-3 rounded-lg bg-amber-50 text-amber-800 text-sm border border-amber-200">No candidate metrics found in section "43. Blood Test". Check if the PDF has embedded selectable text or use Manual Entry.</div>';
+      $('review').innerHTML = '<div class="p-3 rounded-lg bg-amber-50 text-amber-800 text-sm border border-amber-200">No candidate metrics found. Check if the PDF has embedded selectable text or use Manual Entry.</div>';
       return;
     }
 
