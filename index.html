@@ -1,0 +1,708 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#173b57">
+  <link rel="manifest" href="manifest.json">
+  <title>Medical Lab History</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .tab.active {
+      background-color: #173b57;
+      color: #ffffff;
+    }
+  </style>
+  <!-- Local PDF.js Core Library -->
+  <script src="pdf.min.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-[#173b57] text-white py-5 px-4 md:px-8 shadow-md">
+    <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight">Medical Lab History</h1>
+        <p class="text-slate-300 text-sm">Offline-first personal laboratory tracker & parser</p>
+      </div>
+      <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.1 (Local Worker Built-in)</span>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-5xl w-full mx-auto p-3 md:p-6 flex-grow">
+    
+    <!-- Navigation Tabs -->
+    <nav class="flex space-x-2 overflow-x-auto pb-2 mb-4 border-b border-slate-200">
+      <button class="tab active px-4 py-2 rounded-lg font-semibold text-sm transition bg-slate-200 text-slate-700 hover:bg-slate-300" data-tab="dashboard">Dashboard</button>
+      <button class="tab px-4 py-2 rounded-lg font-semibold text-sm transition bg-slate-200 text-slate-700 hover:bg-slate-300" data-tab="import">Import PDF</button>
+      <button class="tab px-4 py-2 rounded-lg font-semibold text-sm transition bg-slate-200 text-slate-700 hover:bg-slate-300" data-tab="history">History & Backup</button>
+      <button class="tab px-4 py-2 rounded-lg font-semibold text-sm transition bg-slate-200 text-slate-700 hover:bg-slate-300" data-tab="ranges">Reference Ranges</button>
+    </nav>
+
+    <!-- Panel 1: Dashboard -->
+    <section id="dashboard" class="panel active space-y-4">
+      <div class="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm space-y-4">
+        <h2 class="text-lg font-bold text-slate-800">Lab Trends</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Parameter</label>
+            <select id="parameter" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">From date (optional)</label>
+            <input type="date" id="from" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">To date (optional)</label>
+            <input type="date" id="to" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div id="summary" class="p-3 rounded-lg bg-sky-50 text-sky-800 text-sm border border-sky-100">
+          Import a report or enter a result.
+        </div>
+
+        <!-- SVG Visual Chart -->
+        <div class="overflow-x-auto">
+          <svg id="chart" viewBox="0 0 800 300" class="w-full h-auto min-h-[220px] bg-slate-50/50 rounded-lg border border-slate-200" role="img" aria-label="Lab trend chart"></svg>
+        </div>
+        <div id="legend" class="text-xs text-slate-500 flex flex-wrap gap-3"></div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-800 mb-3">Latest Results</h2>
+        <div id="latest"></div>
+      </div>
+    </section>
+
+    <!-- Panel 2: Import PDF & Manual Entry -->
+    <section id="import" class="panel space-y-4">
+      <div class="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm space-y-4">
+        <h2 class="text-lg font-bold text-slate-800">Import Selectable-Text PDF</h2>
+        <p class="text-xs text-slate-500">Choose a PDF and checkup date. Candidate results must be reviewed and confirmed before saving. Scanned/image-only PDFs are not supported.</p>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">PDF Report</label>
+            <input type="file" id="pdf" accept="application/pdf,.pdf" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Checkup Date</label>
+            <input type="date" id="date" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="pt-2">
+          <button id="extract" class="bg-[#1e638c] hover:bg-[#173b57] text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition">Extract Values</button>
+        </div>
+
+        <div id="status" class="p-3 rounded-lg bg-slate-100 text-slate-700 text-sm border border-slate-200">No PDF selected.</div>
+        <div id="review"></div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm space-y-4">
+        <h2 class="text-lg font-bold text-slate-800">Manual Entry</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Date</label>
+            <input type="date" id="md" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Parameter</label>
+            <select id="mp" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Value</label>
+            <input type="number" step="any" id="mv" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none" placeholder="e.g. 14.2">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Unit</label>
+            <input id="mu" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none" placeholder="e.g. mg/dL">
+          </div>
+        </div>
+        <div>
+          <button id="manual" class="bg-[#1e638c] hover:bg-[#173b57] text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition">Save Result</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Panel 3: History & Backup -->
+    <section id="history" class="panel space-y-4">
+      <div class="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-800 mb-3">Saved Checkups</h2>
+        <div id="historylist"></div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm space-y-4">
+        <h2 class="text-lg font-bold text-slate-800">Backup and Restore</h2>
+        <p class="text-xs text-slate-500">Backup downloads your stored results and configured ranges as a local JSON file. Restore replaces current data after confirmation.</p>
+        <div class="flex flex-wrap gap-3">
+          <button id="backup" class="bg-[#1e638c] hover:bg-[#173b57] text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition">Download Backup</button>
+          <label class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm cursor-pointer transition" for="restore">Choose Backup File</label>
+          <input hidden type="file" id="restore" accept="application/json,.json">
+        </div>
+        <div id="backupstatus" class="p-3 rounded-lg bg-slate-100 text-slate-700 text-sm border border-slate-200"></div>
+      </div>
+    </section>
+
+    <!-- Panel 4: Reference Ranges -->
+    <section id="ranges" class="panel space-y-4">
+      <div class="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm space-y-3">
+        <h2 class="text-lg font-bold text-slate-800">Reference Ranges</h2>
+        <p class="text-xs text-slate-500">These are customizable reference bounds. Use the exact standard thresholds indicated by your medical laboratory or physician.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr class="bg-slate-100 border-b border-slate-200 text-slate-700">
+                <th class="p-2 font-semibold">Parameter</th>
+                <th class="p-2 font-semibold">Unit</th>
+                <th class="p-2 font-semibold">Low</th>
+                <th class="p-2 font-semibold">High</th>
+                <th class="p-2 font-semibold">Action</th>
+              </tr>
+            </thead>
+            <tbody id="rangetable" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="max-w-5xl w-full mx-auto p-4 text-center text-xs text-slate-500 border-t border-slate-200 mt-auto">
+    Personal medical history tracker only. Not intended for clinical diagnosis. Always export backups regularly to avoid data loss.
+  </footer>
+
+  <!-- Application Logic -->
+  <script>
+  'use strict';
+
+  // Key Parameters Schema
+  const KEY = 'labHistory.v2';
+  const P = [
+    ['HB', 'g/dL', 13, 17],
+    ['Erythrocyte', '10^6/µL', 4.5, 5.5],
+    ['Leucocyte', '10^3/µL', 4, 10],
+    ['Trombocyte', '10^3/µL', 150, 410],
+    ['Sediment Rate', 'mm/hr', 0, 15],
+    ['Glucose', 'mg/dL', 70, 115],
+    ['Chol. Total', 'mg/dL', 0, 200],
+    ['HDL', 'mg/dL', 40, 60],
+    ['LDL', 'mg/dL', 0, 100],
+    ['Triglyceride', 'mg/dL', 0, 150],
+    ['Ureum', 'mg/dL', 15, 42],
+    ['Creatinine', 'mg/dL', 0.6, 1.2],
+    ['SGOT', 'U/L', 0, 35],
+    ['SGPT', 'U/L', 0, 45],
+    ['Uric Acid', 'mg/dL', 4.4, 7.6]
+  ];
+
+  function fresh() {
+    return {
+      version: 1,
+      checkups: [],
+      ranges: Object.fromEntries(P.map(p => [p[0], { unit: p[1], low: p[2], high: p[3] }]))
+    };
+  }
+
+  let S;
+  try {
+    S = JSON.parse(localStorage.getItem(KEY));
+    if (!S || !Array.isArray(S.checkups) || !S.ranges) S = fresh();
+  } catch (e) {
+    S = fresh();
+  }
+
+  let pending = [];
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const today = () => {
+    let d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  function save() {
+    localStorage.setItem(KEY, JSON.stringify(S));
+    render();
+  }
+
+  function tab(id) {
+    document.querySelectorAll('.panel').forEach(x => x.classList.toggle('active', x.id === id));
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === id));
+    if (id === 'dashboard') dash();
+  }
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => tab(b.dataset.tab));
+
+  const options = P.map(p => `<option>${esc(p[0])}</option>`).join('');
+  $('parameter').innerHTML = options;
+  $('mp').innerHTML = options;
+
+  function all() {
+    return S.checkups
+      .flatMap(c => c.results.map(r => ({ ...r, date: c.date, id: c.id, source: c.source })))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  function rangeStatus(r) {
+    let g = S.ranges[r.parameter];
+    if (!g) return '';
+    if (g.low !== null && g.low !== '' && r.value < Number(g.low)) return 'Low';
+    if (g.high !== null && g.high !== '' && r.value > Number(g.high)) return 'High';
+    return 'In range';
+  }
+
+  function dash() {
+    let p = $('parameter').value,
+      from = $('from').value,
+      to = $('to').value,
+      d = all().filter(r => r.parameter === p && (!from || r.date >= from) && (!to || r.date <= to));
+
+    let rangeInfo = S.ranges[p] ? `${S.ranges[p].low ?? 'N/A'}–${S.ranges[p].high ?? 'N/A'} ${S.ranges[p].unit}` : 'Not set';
+    $('summary').textContent = d.length
+      ? `${p}: ${d.length} result(s). Reference bounds: ${rangeInfo}.`
+      : `No saved ${p} results for this range.`;
+
+    chart(d, p);
+
+    let a = all().sort((x, y) => y.date.localeCompare(x.date));
+    $('latest').innerHTML = a.length
+      ? `<div class="overflow-x-auto"><table class="w-full text-left text-sm border-collapse"><thead><tr class="bg-slate-100 border-b border-slate-200">
+          <th class="p-2">Date</th><th class="p-2">Parameter</th><th class="p-2">Result</th><th class="p-2">Status</th>
+        </tr></thead><tbody class="divide-y divide-slate-100">
+        ${a.slice(0, 100).map(r => {
+          let st = rangeStatus(r);
+          let color = st === 'In range' ? 'text-emerald-600 bg-emerald-50' : st ? 'text-amber-700 bg-amber-50 font-medium' : '';
+          return `<tr><td class="p-2">${esc(r.date)}</td><td class="p-2">${esc(r.parameter)}</td><td class="p-2 font-semibold">${esc(r.value)} ${esc(r.unit)}</td><td class="p-2"><span class="px-2 py-0.5 rounded text-xs ${color}">${esc(st)}</span></td></tr>`;
+        }).join('')}
+        </tbody></table></div>`
+      : '<div class="text-center py-6 text-slate-400">No saved results.</div>';
+  }
+
+  function chart(d, p) {
+    let s = $('chart');
+    s.innerHTML = '';
+    let ns = 'http://www.w3.org/2000/svg',
+      add = (t, a, txt) => {
+        let e = document.createElementNS(ns, t);
+        Object.entries(a || {}).forEach(([k, v]) => e.setAttribute(k, v));
+        if (txt !== undefined) e.textContent = txt;
+        s.append(e);
+        return e;
+      };
+
+    let W = 800, H = 300, L = 65, R = 20, T = 25, B = 48, iw = W - L - R, ih = H - T - B;
+
+    if (!d.length) {
+      add('text', { x: 400, y: 150, 'text-anchor': 'middle', fill: '#94a3b8', 'font-size': 14 }, 'No data to chart for selected filter');
+      $('legend').innerHTML = '';
+      return;
+    }
+
+    let vs = d.map(r => r.value),
+      g = S.ranges[p] || { low: null, high: null, unit: '' },
+      lo = Math.min(...vs),
+      hi = Math.max(...vs);
+
+    if (g.low !== null && g.low !== '') lo = Math.min(lo, Number(g.low));
+    if (g.high !== null && g.high !== '' && Number(g.high) < hi * 2) hi = Math.max(hi, Number(g.high));
+
+    if (lo === hi) { lo -= 1; hi += 1; }
+    let pad = (hi - lo) * 0.1;
+    lo -= pad;
+    hi += pad;
+
+    let x = i => L + (d.length === 1 ? iw / 2 : (i * iw) / (d.length - 1)),
+      y = v => T + ((hi - v) * ih) / (hi - lo);
+
+    // Axis Lines & Grid
+    for (let j = 0; j <= 4; j++) {
+      let v = lo + ((hi - lo) * j) / 4, yy = y(v);
+      add('line', { x1: L, y1: yy, x2: W - R, y2: yy, stroke: '#e2e8f0', 'stroke-dasharray': '2 2' });
+      add('text', { x: L - 8, y: yy + 4, 'text-anchor': 'end', fill: '#64748b', 'font-size': 11 }, v.toFixed(1));
+    }
+
+    // High / Low Reference Thresholds
+    for (let k of ['low', 'high']) {
+      if (g[k] !== null && g[k] !== '' && Number.isFinite(Number(g[k]))) {
+        add('line', { x1: L, y1: y(Number(g[k])), x2: W - R, y2: y(Number(g[k])), stroke: '#f59e0b', 'stroke-dasharray': '5 4', 'stroke-width': 1.5 });
+      }
+    }
+
+    // Trend line
+    add('polyline', {
+      points: d.map((r, i) => `${x(i)},${y(r.value)}`).join(' '),
+      fill: 'none', stroke: '#0284c7', 'stroke-width': 2.5
+    });
+
+    // Data points
+    d.forEach((r, i) => {
+      let st = rangeStatus(r);
+      let circleColor = st === 'In range' ? '#0284c7' : '#d97706';
+      add('circle', { cx: x(i), cy: y(r.value), r: 5, fill: circleColor, stroke: '#ffffff', 'stroke-width': 1.5 });
+      add('text', { x: x(i), y: H - B + 18, 'text-anchor': 'middle', fill: '#64748b', 'font-size': d.length > 8 ? 9 : 11 }, r.date.slice(5));
+      add('title', {}, `${r.date}: ${r.value} ${r.unit} (${st})`);
+    });
+
+    add('text', { x: L, y: 15, fill: '#475569', 'font-size': 12, 'font-weight': 'bold' }, `${p} (${g.unit})`);
+    $('legend').innerHTML = '<span><span class="inline-block w-3 h-0.5 bg-amber-500 mr-1"></span>Dashed line: Reference Bounds</span> <span><span class="inline-block w-2.5 h-2.5 rounded-full bg-sky-600 mr-1"></span>In Range</span> <span><span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-600 mr-1"></span>Out of Range</span>';
+  }
+
+  function renderHistory() {
+    $('historylist').innerHTML = S.checkups.length
+      ? `<div class="overflow-x-auto"><table class="w-full text-left text-sm border-collapse"><thead><tr class="bg-slate-100 border-b border-slate-200">
+          <th class="p-2 font-semibold">Date</th><th class="p-2 font-semibold">Source</th><th class="p-2 font-semibold">Results count</th><th class="p-2 font-semibold">Action</th>
+        </tr></thead><tbody class="divide-y divide-slate-100">
+        ${[...S.checkups].sort((a, b) => b.date.localeCompare(a.date)).map(c => `<tr>
+          <td class="p-2 font-medium">${esc(c.date)}</td>
+          <td class="p-2">${esc(c.source)}</td>
+          <td class="p-2">${c.results.length} item(s)</td>
+          <td class="p-2"><button class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded text-xs font-semibold" data-del="${esc(c.id)}">Delete</button></td>
+        </tr>`).join('')}
+        </tbody></table></div>`
+      : '<div class="text-center py-6 text-slate-400">No checkups saved.</div>';
+
+    document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+      if (confirm('Delete this checkup and all associated lab values?')) {
+        S.checkups = S.checkups.filter(c => c.id !== b.dataset.del);
+        save();
+      }
+    });
+  }
+
+  function renderRanges() {
+    $('rangetable').innerHTML = P.map(p => {
+      let r = S.ranges[p[0]] || { unit: p[1], low: '', high: '' };
+      return `<tr>
+        <td class="p-2 font-semibold">${esc(p[0])}</td>
+        <td class="p-2"><input class="p-1 border rounded w-24 text-sm" data-p="${esc(p[0])}" data-f="unit" value="${esc(r.unit ?? '')}"></td>
+        <td class="p-2"><input type="number" step="any" class="p-1 border rounded w-20 text-sm" data-p="${esc(p[0])}" data-f="low" value="${esc(r.low ?? '')}"></td>
+        <td class="p-2"><input type="number" step="any" class="p-1 border rounded w-20 text-sm" data-p="${esc(p[0])}" data-f="high" value="${esc(r.high ?? '')}"></td>
+        <td class="p-2"><button class="bg-sky-700 hover:bg-sky-800 text-white px-3 py-1 rounded text-xs font-semibold" data-range="${esc(p[0])}">Save</button></td>
+      </tr>`;
+    }).join('');
+
+    document.querySelectorAll('[data-range]').forEach(b => b.onclick = () => {
+      let p = b.dataset.range,
+        get = f => $('rangetable').querySelector(`[data-p="${p}"][data-f="${f}"]`).value,
+        lo = get('low'), hi = get('high');
+      if (lo !== '' && hi !== '' && +lo > +hi) {
+        alert('Low bound cannot exceed high bound.');
+        return;
+      }
+      S.ranges[p] = { unit: get('unit'), low: lo === '' ? null : +lo, high: hi === '' ? null : +hi };
+      save();
+    });
+  }
+
+  function render() {
+    dash();
+    renderHistory();
+    renderRanges();
+    $('backupstatus').textContent = `${S.checkups.length} checkup record(s) currently stored in browser engine.`;
+  }
+
+  $('parameter').onchange = dash;
+  $('from').onchange = dash;
+  $('to').onchange = dash;
+
+  function detectParam(text) {
+    let t = text.toLowerCase().replace(/[.:]/g, ' ').replace(/\s+/g, ' ');
+    let aliases = {
+      'Chol. Total': ['chol total', 'total cholesterol', 'cholesterol total', 'cholesterol'],
+      'Trombocyte': ['trombocyte', 'thrombocyte', 'platelet', 'platelets'],
+      'Leucocyte': ['leucocyte', 'leukocyte', 'wbc', 'white blood cell'],
+      'Erythrocyte': ['erytrocyte', 'erythrocyte', 'rbc', 'red blood cell'],
+      'Sediment Rate': ['sediment rate', 'esr', 'bsg'],
+      'Triglyceride': ['triglyceride', 'triglycerides', 'tg'],
+      'Creatinine': ['creatinine', 'creat'],
+      'Ureum': ['ureum', 'urea', 'bun'],
+      'SGOT': ['sgot', 'ast'],
+      'SGPT': ['sgpt', 'alt'],
+      'Uric Acid': ['uric acid', 'uricacid', 'urate'],
+      'Glucose': ['glucose', 'glukosa'],
+      'HB': ['hemoglobin', 'haemoglobin', 'hb'],
+      'HDL': ['hdl', 'hdl cholesterol'],
+      'LDL': ['ldl', 'ldl cholesterol']
+    };
+    for (let p of P) {
+      let terms = aliases[p[0]] || [p[0].toLowerCase()];
+      for (let a of terms) {
+        if (new RegExp('(^|[^a-z0-9])' + a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)', 'i').test(t)) {
+          return p[0];
+        }
+      }
+    }
+    return null;
+  }
+
+  // PDF extraction logic with automatic local-to-CDN fallback
+  async function pdfLines(file) {
+    // If local library is missing (e.g., due to file:// protocol blocking), load it from CDN dynamically
+    if (!window.pdfjsLib) {
+      try {
+        console.warn('Local pdf.min.js not found or blocked. Loading from CDN fallback...');
+        await new Promise((resolve, reject) => {
+          let script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      } catch (err) {
+        throw new Error('PDF.js library is missing locally and CDN fallback failed. Please check your internet connection or use a local server.');
+      }
+    }
+
+    // Configure Worker Source with Fallback Support
+    try {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+    } catch (e) {
+      console.warn('Worker configuration notice:', e);
+    }
+
+    let arrayBuffer = await file.arrayBuffer();
+    let loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+    
+    let pdf;
+    try {
+      pdf = await loadingTask.promise;
+    } catch (err) {
+      // Fallback: retry with CDN worker or disable worker if local worker fails
+      try {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      } catch (workerErr) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+        pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
+      }
+    }
+
+    let lines = [];
+    for (let n = 1; n <= pdf.numPages; n++) {
+      let page = await pdf.getPage(n);
+      let content = await page.getTextContent();
+      
+      let items = content.items
+        .filter(i => i.str && i.str.trim().length > 0)
+        .map(i => ({
+          s: i.str.trim(),
+          x: i.transform[4],
+          y: i.transform[5]
+        }))
+        .sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
+
+      let rows = [];
+      for (let it of items) {
+        let row = rows.find(r => Math.abs(r.y - it.y) <= 3.5);
+        if (!row) {
+          row = { y: it.y, items: [] };
+          rows.push(row);
+        }
+        row.items.push(it);
+      }
+
+      rows.sort((a, b) => b.y - a.y).forEach(r => {
+        r.items.sort((a, b) => a.x - b.x);
+        lines.push(r.items.map(i => i.s).join(' '));
+      });
+    }
+    return { pdf, lines };
+  }
+
+  $('extract').onclick = async () => {
+    let f = $('pdf').files[0], date = $('date').value;
+    if (!f || !date) {
+      $('status').className = 'p-3 rounded-lg bg-red-50 text-red-800 text-sm border border-red-200';
+      $('status').textContent = 'Please select a valid PDF file and specify the checkup date.';
+      return;
+    }
+
+    $('status').className = 'p-3 rounded-lg bg-sky-50 text-sky-800 text-sm border border-sky-200';
+    $('status').textContent = 'Extracting contents from PDF document...';
+    $('review').innerHTML = '';
+
+    try {
+      let { pdf, lines } = await pdfLines(f);
+      let seen = new Set();
+      pending = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        let p = detectParam(lines[i]);
+        if (!p || seen.has(p)) continue;
+
+        let tail = lines[i].slice(Math.max(0, lines[i].toLowerCase().indexOf(p.toLowerCase()) + p.length));
+        let m = tail.match(/[-+]?\d+(?:[.,]\d+)?/);
+        let val = m ? Number(m[0].replace(',', '.')) : null;
+        let source = lines[i];
+
+        if (val === null) {
+          for (let j = i + 1; j < Math.min(i + 3, lines.length) && val === null; j++) {
+            let n = lines[j].match(/(?<![A-Za-z])\d+(?:[.,]\d+)?/);
+            if (n) {
+              val = Number(n[0].replace(',', '.'));
+              source += ' / ' + lines[j];
+            }
+          }
+        }
+
+        if (val !== null && Number.isFinite(val)) {
+          pending.push({ parameter: p, value: val, unit: S.ranges[p]?.unit || '', include: true, source, date });
+          seen.add(p);
+        }
+      }
+
+      $('status').className = 'p-3 rounded-lg bg-emerald-50 text-emerald-800 text-sm border border-emerald-200';
+      $('status').textContent = `Parsed ${pdf.numPages} page(s); identified ${pending.length} matchable parameter candidate(s). Verify accuracy below:`;
+      showReview();
+    } catch (e) {
+      $('status').className = 'p-3 rounded-lg bg-red-50 text-red-800 text-sm border border-red-200';
+      $('status').textContent = 'Could not extract PDF data: ' + e.message;
+    }
+  };
+
+  function showReview() {
+    if (!pending.length) {
+      $('review').innerHTML = '<div class="p-3 rounded-lg bg-amber-50 text-amber-800 text-sm border border-amber-200">No candidate metrics found. Check if the PDF has embedded selectable text or use Manual Entry.</div>';
+      return;
+    }
+
+    $('review').innerHTML = `
+      <div class="space-y-3 pt-2">
+        <h3 class="text-md font-bold text-slate-800">Review Extracted Values</h3>
+        <p class="text-xs text-slate-500">Confirm values and matches prior to saving. Uncheck items to exclude them.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr class="bg-slate-100 border-b border-slate-200">
+                <th class="p-2">Save</th>
+                <th class="p-2">Parameter</th>
+                <th class="p-2">Value</th>
+                <th class="p-2">Unit</th>
+                <th class="p-2">Extracted Source Text</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${pending.map((r, i) => `
+                <tr>
+                  <td class="p-2"><input type="checkbox" data-i="${i}" data-f="include" checked class="w-4 h-4 text-sky-600 rounded"></td>
+                  <td class="p-2">
+                    <select data-i="${i}" data-f="parameter" class="p-1 border rounded text-xs">
+                      ${P.map(p => `<option ${p[0] === r.parameter ? 'selected' : ''}>${esc(p[0])}</option>`).join('')}
+                    </select>
+                  </td>
+                  <td class="p-2"><input type="number" step="any" data-i="${i}" data-f="value" value="${esc(r.value)}" class="p-1 border rounded w-20 text-xs"></td>
+                  <td class="p-2"><input data-i="${i}" data-f="unit" value="${esc(r.unit)}" class="p-1 border rounded w-20 text-xs"></td>
+                  <td class="p-2 text-xs text-slate-500 font-mono">${esc(r.source)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button id="confirm" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition">Confirm and Save Selected</button>
+          <button id="cancel" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition">Cancel</button>
+        </div>
+      </div>
+    `;
+
+    $('review').querySelectorAll('[data-i]').forEach(e => e.onchange = () => {
+      let r = pending[+e.dataset.i], f = e.dataset.f;
+      r[f] = f === 'include' ? e.checked : f === 'value' ? Number(e.value) : e.value;
+    });
+
+    $('confirm').onclick = () => {
+      let rows = pending.filter(r => r.include && r.parameter && Number.isFinite(Number(r.value)));
+      if (!rows.length) {
+        alert('Please select at least one valid result.');
+        return;
+      }
+      S.checkups.push({
+        id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+        date: $('date').value,
+        source: $('pdf').files[0]?.name || 'PDF Import',
+        results: rows.map(r => ({
+          parameter: r.parameter,
+          value: Number(r.value),
+          unit: r.unit || S.ranges[r.parameter]?.unit || ''
+        }))
+      });
+      pending = [];
+      $('review').innerHTML = '';
+      $('status').className = 'p-3 rounded-lg bg-emerald-50 text-emerald-800 text-sm border border-emerald-200';
+      $('status').textContent = 'Selected results successfully saved to history.';
+      save();
+      tab('dashboard');
+    };
+
+    $('cancel').onclick = () => {
+      $('review').innerHTML = '';
+      pending = [];
+    };
+  }
+
+  // Manual Input Save
+  $('manual').onclick = () => {
+    let date = $('md').value, p = $('mp').value, raw = $('mv').value, v = Number(raw);
+    if (!date || raw.trim() === '' || !Number.isFinite(v)) {
+      alert('Please enter a valid checkup date and numeric result value.');
+      return;
+    }
+    S.checkups.push({
+      id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+      date,
+      source: 'Manual Entry',
+      results: [{ parameter: p, value: v, unit: $('mu').value || S.ranges[p]?.unit || '' }]
+    });
+    save();
+    $('mv').value = '';
+    $('mu').value = '';
+    tab('dashboard');
+  };
+
+  // Backup Download
+  $('backup').onclick = () => {
+    let blob = new Blob([JSON.stringify({ app: 'Medical Lab History', version: 1, exportedAt: new Date().toISOString(), data: S }, null, 2)], { type: 'application/json' });
+    let a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `medical-lab-backup-${today()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+
+  // Restore Backup File
+  $('restore').onchange = async e => {
+    let f = e.target.files[0];
+    if (!f) return;
+    try {
+      let x = JSON.parse(await f.text()), d = x.data || x;
+      if (!Array.isArray(d.checkups) || !d.ranges) throw new Error('Invalid JSON schema');
+      if (confirm('Replace all current records with this backup?')) {
+        S = { version: 1, checkups: d.checkups, ranges: d.ranges };
+        save();
+        $('backupstatus').className = 'p-3 rounded-lg bg-emerald-50 text-emerald-800 text-sm border border-emerald-200';
+        $('backupstatus').textContent = 'Backup data restored successfully.';
+      }
+    } catch (err) {
+      $('backupstatus').className = 'p-3 rounded-lg bg-red-50 text-red-800 text-sm border border-red-200';
+      $('backupstatus').textContent = 'Restore failed: ' + err.message;
+    }
+    e.target.value = '';
+  };
+
+  // Initial Load Setup
+  $('date').value = $('md').value = today();
+  render();
+
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  }
+  </script>
+</body>
+</html>
