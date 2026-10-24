@@ -41,7 +41,7 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           Download PDF Report
         </button>
-        <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.8</span>
+        <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.9</span>
       </div>
     </div>
   </header>
@@ -84,7 +84,7 @@
     <section id="import" class="panel space-y-4">
       <div class="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm space-y-4">
         <h2 class="text-lg font-bold text-slate-800">Import Selectable-Text PDF</h2>
-        <p class="text-xs text-slate-500">Choose a PDF and checkup date. Candidate results must be reviewed and confirmed before saving. Scanned/image-only PDFs are not supported.</p>
+        <p class="text-xs text-slate-500">Choose a PDF and checkup period (Month & Year). Candidate results must be reviewed and confirmed before saving.</p>
         
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -92,8 +92,8 @@
             <input type="file" id="pdf" accept="application/pdf,.pdf" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Checkup Date</label>
-            <input type="date" id="date" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Checkup Period (Month & Year)</label>
+            <input type="month" id="date" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
           </div>
         </div>
 
@@ -109,8 +109,8 @@
         <h2 class="text-lg font-bold text-slate-800">Manual Entry</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Date</label>
-            <input type="date" id="md" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Period (Month & Year)</label>
+            <input type="month" id="md" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">Parameter</label>
@@ -220,9 +220,9 @@
   let pending = [];
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const today = () => {
+  const currentMonth = () => {
     let d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   };
 
   function save() {
@@ -275,7 +275,6 @@
     let container = $('chartsContainer');
     container.innerHTML = '';
 
-    // Generate individual chart card for each parameter
     P.forEach(([param, defUnit, defLow, defHigh]) => {
       let pData = filteredData.filter(r => r.parameter === param);
       let g = S.ranges[param] || { low: defLow, high: defHigh, unit: defUnit };
@@ -306,11 +305,10 @@
       container.appendChild(card);
     });
 
-    // Render latest results table
     let a = allData.sort((x, y) => y.date.localeCompare(x.date));
     $('latest').innerHTML = a.length
       ? `<div class="overflow-x-auto"><table class="w-full text-left text-sm border-collapse"><thead><tr class="bg-slate-100 border-b border-slate-200">
-          <th class="p-2">Date</th><th class="p-2">Parameter</th><th class="p-2">Result</th><th class="p-2">Status</th>
+          <th class="p-2">Period</th><th class="p-2">Parameter</th><th class="p-2">Result</th><th class="p-2">Status</th>
         </tr></thead><tbody class="divide-y divide-slate-100">
         ${a.slice(0, 50).map(r => {
           let st = rangeStatus(r);
@@ -380,7 +378,8 @@
       let st = rangeStatus(r);
       let circleColor = st === 'In range' ? '#0284c7' : '#d97706';
       add('circle', { cx: x(i), cy: y(r.value), r: 4, fill: circleColor, stroke: '#ffffff', 'stroke-width': 1 });
-      add('text', { x: x(i), y: H - B + 14, 'text-anchor': 'middle', fill: '#64748b', 'font-size': 9 }, r.date.slice(5));
+      // Display YYYY-MM on X-axis
+      add('text', { x: x(i), y: H - B + 14, 'text-anchor': 'middle', fill: '#64748b', 'font-size': 9 }, r.date);
       add('title', {}, `${r.date}: ${r.value} ${r.unit} (${st})`);
     });
   }
@@ -390,7 +389,7 @@
   function renderHistory() {
     $('historylist').innerHTML = S.checkups.length
       ? `<div class="overflow-x-auto"><table class="w-full text-left text-sm border-collapse"><thead><tr class="bg-slate-100 border-b border-slate-200">
-          <th class="p-2 font-semibold">Date</th><th class="p-2 font-semibold">Source</th><th class="p-2 font-semibold">Results count</th><th class="p-2 font-semibold">Action</th>
+          <th class="p-2 font-semibold">Period (Month/Year)</th><th class="p-2 font-semibold">Source</th><th class="p-2 font-semibold">Results count</th><th class="p-2 font-semibold">Action</th>
         </tr></thead><tbody class="divide-y divide-slate-100">
         ${[...S.checkups].sort((a, b) => b.date.localeCompare(a.date)).map(c => `<tr>
           <td class="p-2 font-medium">${esc(c.date)}</td>
@@ -543,7 +542,7 @@
     let f = $('pdf').files[0], date = $('date').value;
     if (!f || !date) {
       $('status').className = 'p-3 rounded-lg bg-red-50 text-red-800 text-sm border border-red-200';
-      $('status').textContent = 'Please select a valid PDF file and specify the checkup date.';
+      $('status').textContent = 'Please select a valid PDF file and specify the checkup period (Month & Year).';
       return;
     }
 
@@ -687,7 +686,7 @@
   $('manual').onclick = () => {
     let date = $('md').value, p = $('mp').value, raw = $('mv').value, v = Number(raw);
     if (!date || raw.trim() === '' || !Number.isFinite(v)) {
-      alert('Please enter a valid checkup date and numeric result value.');
+      alert('Please enter a valid checkup period and numeric result value.');
       return;
     }
     S.checkups.push({
@@ -707,7 +706,8 @@
     let blob = new Blob([JSON.stringify({ app: 'Medical Lab History', version: 1, exportedAt: new Date().toISOString(), data: S }, null, 2)], { type: 'application/json' });
     let a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `medical-lab-backup-${today()}.json`;
+    let todayStr = new Date().toISOString().slice(0, 10);
+    a.download = `medical-lab-backup-${todayStr}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
@@ -733,7 +733,7 @@
   };
 
   // Initial Load Setup
-  $('date').value = $('md').value = today();
+  $('date').value = $('md').value = currentMonth();
   render();
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
