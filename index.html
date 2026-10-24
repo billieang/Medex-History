@@ -30,7 +30,7 @@
         <h1 class="text-xl font-bold tracking-tight">Medical Lab History</h1>
         <p class="text-slate-300 text-sm">Offline-first personal laboratory tracker & parser</p>
       </div>
-      <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.3 (Stacked Cell Parser)</span>
+      <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.4 (Grid Table Parser)</span>
     </div>
   </header>
 
@@ -440,6 +440,7 @@
     return null;
   }
 
+  // Grid-aware PDF extraction logic for multi-column tables in "43. Blood Test"
   async function pdfLines(file) {
     if (!window.pdfjsLib) {
       try {
@@ -476,7 +477,7 @@
       }
     }
 
-    let lines = [];
+    let allRows = [];
     for (let n = 1; n <= pdf.numPages; n++) {
       let page = await pdf.getPage(n);
       let content = await page.getTextContent();
@@ -487,12 +488,12 @@
           s: i.str.trim(),
           x: i.transform[4],
           y: i.transform[5]
-        }))
-        .sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
+        }));
 
+      // Group items into visual rows by y coordinate (tolerance 4 units)
       let rows = [];
       for (let it of items) {
-        let row = rows.find(r => Math.abs(r.y - it.y) <= 3.5);
+        let row = rows.find(r => Math.abs(r.y - it.y) <= 4);
         if (!row) {
           row = { y: it.y, items: [] };
           rows.push(row);
@@ -500,29 +501,16 @@
         row.items.push(it);
       }
 
-      rows.sort((a, b) => b.y - a.y).forEach(r => {
-        r.items.sort((a, b) => a.x - b.x);
-        lines.push(r.items.map(i => i.s).join(' '));
-      });
+      // Sort rows top-to-bottom (descending y)
+      rows.sort((a, b) => b.y - a.y);
+
+      // Sort items within each row left-to-right (ascending x)
+      rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
+
+      allRows.push(...rows);
     }
 
-    let insideBloodTest = false;
-    let bloodTestLines = [];
-
-    for (let line of lines) {
-      if (/43\.\s*blood\s*test/i.test(line)) {
-        insideBloodTest = true;
-        continue;
-      }
-      if (insideBloodTest) {
-        if (/^\s*\d{2}\.\s+/.test(line)) {
-          break;
-        }
-        bloodTestLines.push(line);
-      }
-    }
-
-    return { pdf, lines: bloodTestLines.length ? bloodTestLines : lines };
+    return { pdf, rows: allRows };
   }
 
   $('extract').onclick = async () => {
@@ -538,35 +526,61 @@
     $('review').innerHTML = '';
 
     try {
-      let { pdf, lines } = await pdfLines(f);
+      let { pdf, rows } = await pdfLines(f);
       let seen = new Set();
       pending = [];
 
-      for (let i = 0; i < lines.length; i++) {
-        let p = detectParam(lines[i]);
-        if (!p || seen.has(p)) continue;
+      // Find where "43. Blood Test" section starts
+      let startIndex = rows.findIndex(r => r.items.some(i => /43\.\s*blood\s*test/i.test(i.s)));
+      let targetRows = startIndex !== -1 ? rows.slice(startIndex) : rows;
 
-        let val = null;
-        let source = lines[i];
+      // Scan through rows looking for parameter headers, taking values from the corresponding cell directly below in each column
+      for (let rIdx = 0; rIdx < targetRows.length - 1; rIdx++) {
+        let headerRow = targetRows[rIdx];
 
-        // Exclusively look at the line directly below (stacked cell under header)
-        if (i + 1 < lines.length) {
-          let nextLine = lines[i + 1];
-          let mNextLine = nextLine.match(/[-+]?\d+(?:[.,]\d+)?/);
-          if (mNextLine) {
-            val = Number(mNextLine[0].replace(',', '.'));
-            source += ' / (cell below) -> ' + nextLine;
-          }
+        // Stop if we hit a subsequent section header (e.g. "44.")
+        if (headerRow.items.some(i => /^\s*\d{2}\.\s+/.test(i.s) && !/43\.\s*blood\s*test/i.test(i.s))) {
+          break;
         }
 
-        if (val !== null && Number.isFinite(val)) {
-          pending.push({ parameter: p, value: val, unit: S.ranges[p]?.unit || '', include: true, source, date });
-          seen.add(p);
+        let hasParams = headerRow.items.some(i => detectParam(i.s) !== null);
+        if (!hasParams) continue;
+
+        let valueRow = targetRows[rIdx + 1];
+        if (!valueRow) continue;
+
+        // Check each column in the header row
+        for (let headerItem of headerRow.items) {
+          let param = detectParam(headerItem.s);
+          if (!param || seen.has(param)) continue;
+
+          // Find the corresponding value item in the row below based on closest horizontal X position
+          let valItem = valueRow.items.reduce((closest, current) => {
+            return Math.abs(current.x - headerItem.x) < Math.abs(closest.x - headerItem.x) ? current : closest;
+          }, valueRow.items[0]);
+
+          if (!valItem) continue;
+
+          let m = valItem.s.match(/[-+]?\d+(?:[.,]\d+)?/);
+          if (m) {
+            let val = Number(m[0].replace(',', '.'));
+            if (Number.isFinite(val)) {
+              pending.push({
+                parameter: param,
+                value: val,
+                unit: S.ranges[param]?.unit || '',
+                include: true,
+                source: `${headerItem.s} -> ${valItem.s}`,
+                date
+              });
+              seen.add(param);
+            }
+          }
         }
       }
 
       $('status').className = 'p-3 rounded-lg bg-emerald-50 text-emerald-800 text-sm border border-emerald-200';
-      $('status').textContent = `Parsed "43. Blood Test"; identified ${pending.length} parameter candidate(s). Verify accuracy below:`;
+      $('status').textContent = `Parsed table "43. Blood Test"; identified ${pending.length} parameter candidate(s). Verify accuracy below:`;
       showReview();
     } catch (e) {
       $('status').className = 'p-3 rounded-lg bg-red-50 text-red-800 text-sm border border-red-200';
