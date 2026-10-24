@@ -17,6 +17,12 @@
       background-color: #173b57;
       color: #ffffff;
     }
+    @media print {
+      nav, header, button, .no-print { display: none !important; }
+      body { background: white !important; color: black !important; padding: 0 !important; }
+      .panel { display: block !important; }
+      .chart-card { break-inside: avoid; page-break-inside: avoid; border: 1px solid #cbd5e1 !important; box-shadow: none !important; margin-bottom: 1.5rem; }
+    }
   </style>
   <!-- Local PDF.js Core Library -->
   <script src="pdf.min.js"></script>
@@ -25,20 +31,26 @@
 
   <!-- Header -->
   <header class="bg-[#173b57] text-white py-5 px-4 md:px-8 shadow-md">
-    <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+    <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
       <div>
         <h1 class="text-xl font-bold tracking-tight">Medical Lab History</h1>
         <p class="text-slate-300 text-sm">Offline-first personal laboratory tracker & parser</p>
       </div>
-      <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.7 (Positional Line-Pair Parser)</span>
+      <div class="flex items-center gap-3">
+        <button onclick="window.print()" class="no-print bg-sky-600 hover:bg-sky-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          Download PDF Report
+        </button>
+        <span class="text-xs bg-slate-700/60 px-3 py-1 rounded-full text-slate-300 border border-slate-600">v1.8</span>
+      </div>
     </div>
   </header>
 
   <!-- Main Container -->
-  <main class="max-w-5xl w-full mx-auto p-3 md:p-6 flex-grow">
+  <main class="max-w-6xl w-full mx-auto p-3 md:p-6 flex-grow">
     
     <!-- Navigation Tabs -->
-    <nav class="flex space-x-2 overflow-x-auto pb-2 mb-4 border-b border-slate-200">
+    <nav class="no-print flex space-x-2 overflow-x-auto pb-2 mb-4 border-b border-slate-200">
       <button class="tab active px-4 py-2 rounded-lg font-semibold text-sm transition bg-slate-200 text-slate-700 hover:bg-slate-300" data-tab="dashboard">Dashboard</button>
       <button class="tab px-4 py-2 rounded-lg font-semibold text-sm transition bg-slate-200 text-slate-700 hover:bg-slate-300" data-tab="import">Import PDF</button>
       <button class="tab px-4 py-2 rounded-lg font-semibold text-sm transition bg-slate-200 text-slate-700 hover:bg-slate-300" data-tab="history">History & Backup</button>
@@ -46,37 +58,24 @@
     </nav>
 
     <!-- Panel 1: Dashboard -->
-    <section id="dashboard" class="panel active space-y-4">
-      <div class="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm space-y-4">
-        <h2 class="text-lg font-bold text-slate-800">Lab Trends</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Parameter</label>
-            <select id="parameter" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none"></select>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">From date (optional)</label>
-            <input type="date" id="from" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">To date (optional)</label>
-            <input type="date" id="to" class="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
-          </div>
+    <section id="dashboard" class="panel active space-y-6">
+      <div class="no-print bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-800">Lab Trends Dashboard</h2>
+          <p class="text-xs text-slate-500">Viewing all parameters simultaneously.</p>
         </div>
-
-        <div id="summary" class="p-3 rounded-lg bg-sky-50 text-sky-800 text-sm border border-sky-100">
-          Import a report or enter a result.
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <label class="text-xs font-semibold text-slate-600 whitespace-nowrap">Filter Year:</label>
+          <select id="filterYear" class="p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none w-full sm:w-40"></select>
         </div>
-
-        <!-- SVG Visual Chart -->
-        <div class="overflow-x-auto">
-          <svg id="chart" viewBox="0 0 800 300" class="w-full h-auto min-h-[220px] bg-slate-50/50 rounded-lg border border-slate-200" role="img" aria-label="Lab trend chart"></svg>
-        </div>
-        <div id="legend" class="text-xs text-slate-500 flex flex-wrap gap-3"></div>
       </div>
 
-      <div class="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm">
-        <h2 class="text-lg font-bold text-slate-800 mb-3">Latest Results</h2>
+      <!-- Multi-Chart Grid Container -->
+      <div id="chartsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+
+      <!-- Latest Results Summary Table -->
+      <div class="chart-card bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-800 mb-3">Latest Results History</h2>
         <div id="latest"></div>
       </div>
     </section>
@@ -175,7 +174,7 @@
 
   </main>
 
-  <footer class="max-w-5xl w-full mx-auto p-4 text-center text-xs text-slate-500 border-t border-slate-200 mt-auto">
+  <footer class="no-print max-w-6xl w-full mx-auto p-4 text-center text-xs text-slate-500 border-t border-slate-200 mt-auto">
     Personal medical history tracker only. Not intended for clinical diagnosis. Always export backups regularly to avoid data loss.
   </footer>
 
@@ -238,9 +237,8 @@
   }
   document.querySelectorAll('.tab').forEach(b => b.onclick = () => tab(b.dataset.tab));
 
-  const options = P.map(p => `<option>${esc(p[0])}</option>`).join('');
-  $('parameter').innerHTML = options;
-  $('mp').innerHTML = options;
+  const manualOptions = P.map(p => `<option>${esc(p[0])}</option>`).join('');
+  $('mp').innerHTML = manualOptions;
 
   function all() {
     return S.checkups
@@ -256,25 +254,65 @@
     return 'In range';
   }
 
+  function updateYearDropdown() {
+    let yearSelect = $('filterYear');
+    let currentVal = yearSelect.value || 'all';
+    
+    let years = new Set(S.checkups.map(c => c.date.slice(0, 4)));
+    years.add(String(new Date().getFullYear()));
+    let sortedYears = Array.from(years).sort().reverse();
+
+    yearSelect.innerHTML = `<option value="all">All Years</option>` + sortedYears.map(y => `<option value="${y}" ${y === currentVal ? 'selected' : ''}>${y}</option>`).join('');
+    if (!yearSelect.value) yearSelect.value = 'all';
+  }
+
   function dash() {
-    let p = $('parameter').value,
-      from = $('from').value,
-      to = $('to').value,
-      d = all().filter(r => r.parameter === p && (!from || r.date >= from) && (!to || r.date <= to));
+    updateYearDropdown();
+    let selectedYear = $('filterYear').value;
+    let allData = all();
+    let filteredData = allData.filter(r => selectedYear === 'all' || r.date.startsWith(selectedYear));
 
-    let rangeInfo = S.ranges[p] ? `${S.ranges[p].low ?? 'N/A'}–${S.ranges[p].high ?? 'N/A'} ${S.ranges[p].unit}` : 'Not set';
-    $('summary').textContent = d.length
-      ? `${p}: ${d.length} result(s). Reference bounds: ${rangeInfo}.`
-      : `No saved ${p} results for this range.`;
+    let container = $('chartsContainer');
+    container.innerHTML = '';
 
-    chart(d, p);
+    // Generate individual chart card for each parameter
+    P.forEach(([param, defUnit, defLow, defHigh]) => {
+      let pData = filteredData.filter(r => r.parameter === param);
+      let g = S.ranges[param] || { low: defLow, high: defHigh, unit: defUnit };
+      let rangeText = `${g.low ?? 'N/A'}–${g.high ?? 'N/A'} ${g.unit}`;
 
-    let a = all().sort((x, y) => y.date.localeCompare(x.date));
+      let card = document.createElement('div');
+      card.className = 'chart-card bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3';
+      
+      let headerDiv = document.createElement('div');
+      headerDiv.className = 'flex justify-between items-baseline';
+      headerDiv.innerHTML = `
+        <h3 class="font-bold text-slate-800 text-sm">${esc(param)} <span class="text-xs font-normal text-slate-500">(${esc(g.unit)})</span></h3>
+        <span class="text-xs text-slate-500">Bounds: ${esc(rangeText)}</span>
+      `;
+      card.appendChild(headerDiv);
+
+      let svgWrapper = document.createElement('div');
+      svgWrapper.className = 'overflow-x-auto';
+      
+      let s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      s.setAttribute('viewBox', '0 0 600 220');
+      s.setAttribute('class', 'w-full h-auto min-h-[160px] bg-slate-50/50 rounded-lg border border-slate-100');
+      
+      renderSingleChart(s, pData, g);
+      svgWrapper.appendChild(s);
+      card.appendChild(svgWrapper);
+
+      container.appendChild(card);
+    });
+
+    // Render latest results table
+    let a = allData.sort((x, y) => y.date.localeCompare(x.date));
     $('latest').innerHTML = a.length
       ? `<div class="overflow-x-auto"><table class="w-full text-left text-sm border-collapse"><thead><tr class="bg-slate-100 border-b border-slate-200">
           <th class="p-2">Date</th><th class="p-2">Parameter</th><th class="p-2">Result</th><th class="p-2">Status</th>
         </tr></thead><tbody class="divide-y divide-slate-100">
-        ${a.slice(0, 100).map(r => {
+        ${a.slice(0, 50).map(r => {
           let st = rangeStatus(r);
           let color = st === 'In range' ? 'text-emerald-600 bg-emerald-50' : st ? 'text-amber-700 bg-amber-50 font-medium' : '';
           return `<tr><td class="p-2">${esc(r.date)}</td><td class="p-2">${esc(r.parameter)}</td><td class="p-2 font-semibold">${esc(r.value)} ${esc(r.unit)}</td><td class="p-2"><span class="px-2 py-0.5 rounded text-xs ${color}">${esc(st)}</span></td></tr>`;
@@ -283,8 +321,7 @@
       : '<div class="text-center py-6 text-slate-400">No saved results.</div>';
   }
 
-  function chart(d, p) {
-    let s = $('chart');
+  function renderSingleChart(s, d, g) {
     s.innerHTML = '';
     let ns = 'http://www.w3.org/2000/svg',
       add = (t, a, txt) => {
@@ -295,16 +332,14 @@
         return e;
       };
 
-    let W = 800, H = 300, L = 65, R = 20, T = 25, B = 48, iw = W - L - R, ih = H - T - B;
+    let W = 600, H = 220, L = 50, R = 15, T = 15, B = 35, iw = W - L - R, ih = H - T - B;
 
     if (!d.length) {
-      add('text', { x: 400, y: 150, 'text-anchor': 'middle', fill: '#94a3b8', 'font-size': 14 }, 'No data to chart for selected filter');
-      $('legend').innerHTML = '';
+      add('text', { x: 300, y: 110, 'text-anchor': 'middle', fill: '#94a3b8', 'font-size': 12 }, 'No data for selected year');
       return;
     }
 
     let vs = d.map(r => r.value),
-      g = S.ranges[p] || { low: null, high: null, unit: '' },
       lo = Math.min(...vs),
       hi = Math.max(...vs);
 
@@ -319,38 +354,38 @@
     let x = i => L + (d.length === 1 ? iw / 2 : (i * iw) / (d.length - 1)),
       y = v => T + ((hi - v) * ih) / (hi - lo);
 
-    // Axis Lines & Grid
-    for (let j = 0; j <= 4; j++) {
-      let v = lo + ((hi - lo) * j) / 4, yy = y(v);
+    for (let j = 0; j <= 3; j++) {
+      let v = lo + ((hi - lo) * j) / 3, yy = y(v);
       add('line', { x1: L, y1: yy, x2: W - R, y2: yy, stroke: '#e2e8f0', 'stroke-dasharray': '2 2' });
-      add('text', { x: L - 8, y: yy + 4, 'text-anchor': 'end', fill: '#64748b', 'font-size': 11 }, v.toFixed(1));
+      add('text', { x: L - 6, y: yy + 3, 'text-anchor': 'end', fill: '#64748b', 'font-size': 10 }, v.toFixed(1));
     }
 
-    // High / Low Reference Thresholds
     for (let k of ['low', 'high']) {
       if (g[k] !== null && g[k] !== '' && Number.isFinite(Number(g[k]))) {
-        add('line', { x1: L, y1: y(Number(g[k])), x2: W - R, y2: y(Number(g[k])), stroke: '#f59e0b', 'stroke-dasharray': '5 4', 'stroke-width': 1.5 });
+        let yy = y(Number(g[k]));
+        if (yy >= T && yy <= H - B) {
+          add('line', { x1: L, y1: yy, x2: W - R, y2: yy, stroke: '#f59e0b', 'stroke-dasharray': '4 3', 'stroke-width': 1.2 });
+        }
       }
     }
 
-    // Trend line
-    add('polyline', {
-      points: d.map((r, i) => `${x(i)},${y(r.value)}`).join(' '),
-      fill: 'none', stroke: '#0284c7', 'stroke-width': 2.5
-    });
+    if (d.length > 1) {
+      add('polyline', {
+        points: d.map((r, i) => `${x(i)},${y(r.value)}`).join(' '),
+        fill: 'none', stroke: '#0284c7', 'stroke-width': 2
+      });
+    }
 
-    // Data points
     d.forEach((r, i) => {
       let st = rangeStatus(r);
       let circleColor = st === 'In range' ? '#0284c7' : '#d97706';
-      add('circle', { cx: x(i), cy: y(r.value), r: 5, fill: circleColor, stroke: '#ffffff', 'stroke-width': 1.5 });
-      add('text', { x: x(i), y: H - B + 18, 'text-anchor': 'middle', fill: '#64748b', 'font-size': d.length > 8 ? 9 : 11 }, r.date.slice(5));
+      add('circle', { cx: x(i), cy: y(r.value), r: 4, fill: circleColor, stroke: '#ffffff', 'stroke-width': 1 });
+      add('text', { x: x(i), y: H - B + 14, 'text-anchor': 'middle', fill: '#64748b', 'font-size': 9 }, r.date.slice(5));
       add('title', {}, `${r.date}: ${r.value} ${r.unit} (${st})`);
     });
-
-    add('text', { x: L, y: 15, fill: '#475569', 'font-size': 12, 'font-weight': 'bold' }, `${p} (${g.unit})`);
-    $('legend').innerHTML = '<span><span class="inline-block w-3 h-0.5 bg-amber-500 mr-1"></span>Dashed line: Reference Bounds</span> <span><span class="inline-block w-2.5 h-2.5 rounded-full bg-sky-600 mr-1"></span>In Range</span> <span><span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-600 mr-1"></span>Out of Range</span>';
   }
+
+  $('filterYear').onchange = dash;
 
   function renderHistory() {
     $('historylist').innerHTML = S.checkups.length
@@ -364,7 +399,7 @@
           <td class="p-2"><button class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded text-xs font-semibold" data-del="${esc(c.id)}">Delete</button></td>
         </tr>`).join('')}
         </tbody></table></div>`
-      : '<div class="text-center py-6 text-slate-400">No saved results.</div>';
+      : '<div class="text-center py-6 text-slate-400">No checkups saved.</div>';
 
     document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
       if (confirm('Delete this checkup and all associated lab values?')) {
@@ -406,41 +441,6 @@
     $('backupstatus').textContent = `${S.checkups.length} checkup record(s) currently stored in browser engine.`;
   }
 
-  $('parameter').onchange = dash;
-  $('from').onchange = dash;
-  $('to').onchange = dash;
-
-  function detectParam(text) {
-    let t = text.toLowerCase().replace(/[.:]/g, ' ').replace(/\s+/g, ' ').trim();
-    let aliases = {
-      'Chol. Total': ['chol total', 'total cholesterol', 'cholesterol total', 'cholesterol'],
-      'Trombocyte': ['trombocyte', 'thrombocyte', 'platelet', 'platelets'],
-      'Leucocyte': ['leucocyte', 'leukocyte', 'wbc', 'white blood cell'],
-      'Erythrocyte': ['erytrocyte', 'erythrocyte', 'rbc', 'red blood cell'],
-      'Sediment Rate': ['sediment rate', 'esr', 'bsg'],
-      'Triglyceride': ['triglyceride', 'triglycerides', 'tg'],
-      'Creatinine': ['creatinine', 'creat'],
-      'Ureum': ['ureum', 'urea', 'bun'],
-      'SGOT': ['sgot', 'ast'],
-      'SGPT': ['sgpt', 'alt'],
-      'Uric Acid': ['uric acid', 'uricacid', 'urate'],
-      'Glucose': ['glucose', 'glukosa'],
-      'HB': ['hemoglobin', 'haemoglobin', 'hb'],
-      'HDL': ['hdl', 'hdl cholesterol'],
-      'LDL': ['ldl', 'ldl cholesterol']
-    };
-    for (let p of P) {
-      let terms = aliases[p[0]] || [p[0].toLowerCase()];
-      for (let a of terms) {
-        if (new RegExp('(^|[^a-z0-9])' + a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)', 'i').test(t)) {
-          return p[0];
-        }
-      }
-    }
-    return null;
-  }
-
-  // Standard line-by-line extraction with positional matching across multi-column table rows
   async function pdfLines(file) {
     if (!window.pdfjsLib) {
       try {
@@ -490,7 +490,6 @@
           y: i.transform[5]
         }));
 
-      // Group text items by Y coordinate into visual rows
       let pageRows = [];
       for (let it of items) {
         let row = pageRows.find(r => Math.abs(r.y - it.y) <= 4);
@@ -501,15 +500,43 @@
         row.items.push(it);
       }
 
-      // Sort rows top-to-bottom
       pageRows.sort((a, b) => b.y - a.y);
-      // Sort items left-to-right within each row
       pageRows.forEach(r => r.items.sort((a, b) => a.x - b.x));
 
       rows.push(...pageRows);
     }
 
     return { pdf, rows };
+  }
+
+  function detectParam(text) {
+    let t = text.toLowerCase().replace(/[.:]/g, ' ').replace(/\s+/g, ' ').trim();
+    let aliases = {
+      'Chol. Total': ['chol total', 'total cholesterol', 'cholesterol total', 'cholesterol'],
+      'Trombocyte': ['trombocyte', 'thrombocyte', 'platelet', 'platelets'],
+      'Leucocyte': ['leucocyte', 'leukocyte', 'wbc', 'white blood cell'],
+      'Erythrocyte': ['erytrocyte', 'erythrocyte', 'rbc', 'red blood cell'],
+      'Sediment Rate': ['sediment rate', 'esr', 'bsg'],
+      'Triglyceride': ['triglyceride', 'triglycerides', 'tg'],
+      'Creatinine': ['creatinine', 'creat'],
+      'Ureum': ['ureum', 'urea', 'bun'],
+      'SGOT': ['sgot', 'ast'],
+      'SGPT': ['sgpt', 'alt'],
+      'Uric Acid': ['uric acid', 'uricacid', 'urate'],
+      'Glucose': ['glucose', 'glukosa'],
+      'HB': ['hemoglobin', 'haemoglobin', 'hb'],
+      'HDL': ['hdl', 'hdl cholesterol'],
+      'LDL': ['ldl', 'ldl cholesterol']
+    };
+    for (let p of P) {
+      let terms = aliases[p[0]] || [p[0].toLowerCase()];
+      for (let a of terms) {
+        if (new RegExp('(^|[^a-z0-9])' + a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)', 'i').test(t)) {
+          return p[0];
+        }
+      }
+    }
+    return null;
   }
 
   $('extract').onclick = async () => {
@@ -529,12 +556,10 @@
       let seen = new Set();
       pending = [];
 
-      // Scan consecutive pairs of rows (Header row and Value row directly below)
       for (let rIdx = 0; rIdx < rows.length - 1; rIdx++) {
         let headerRow = rows[rIdx];
         let valueRow = rows[rIdx + 1];
 
-        // Check if the header row contains any recognized parameters
         let headerItemsWithParams = headerRow.items.map(item => ({
           item,
           param: detectParam(item.s)
@@ -542,7 +567,6 @@
 
         if (headerItemsWithParams.length === 0) continue;
 
-        // For each header item found in this row, map it to the closest value item in the row below (by X coordinate)
         for (let { item: headerItem, param } of headerItemsWithParams) {
           if (seen.has(param)) continue;
 
